@@ -9,7 +9,6 @@ from pydantic import BaseModel, Field
 from app.domain.entities import ChatTurn, Citation
 
 Role = Literal["user", "assistant"]
-Category = Literal["pre_op", "day_of", "post_op", "general"]
 
 
 class ChatTurnDTO(BaseModel):
@@ -23,7 +22,10 @@ class ChatTurnDTO(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     history: list[ChatTurnDTO] = Field(default_factory=list)
-    category: Category | None = None
+    # Free-form tag values matching the Qdrant payload tags (category +
+    # department). None / omitted = no filter on that dimension.
+    category: str | None = Field(default=None, max_length=64)
+    department: str | None = Field(default=None, max_length=64)
 
 
 class CitationDTO(BaseModel):

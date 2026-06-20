@@ -70,6 +70,7 @@ class AnswerQuestion:
         *,
         history: Sequence[ChatTurn] = (),
         category: str | None = None,
+        department: str | None = None,
     ) -> AsyncIterator[AnswerEvent]:
         log = logging.getLogger("ods.answer")
 
@@ -96,10 +97,11 @@ class AnswerQuestion:
         # literal intent. Dedup exact duplicates (raw == reformulated is common).
         search_queries = list(dict.fromkeys([question, *analysis.queries()]))
         log.info(
-            "raw=%r search_queries=%r category=%r",
+            "raw=%r search_queries=%r category=%r department=%r",
             question,
             search_queries,
             category,
+            department,
         )
 
         # 2. Hybrid retrieval (dense + sparse, RRF) per query, with category
@@ -109,7 +111,10 @@ class AnswerQuestion:
         for q in search_queries:
             query_embedding = self._embedder.embed_query(q)
             for sc in self._store.hybrid_search(
-                query_embedding, category=category, top_k=self._cfg.retrieval_top_k
+                query_embedding,
+                category=category,
+                department=department,
+                top_k=self._cfg.retrieval_top_k,
             ):
                 best = merged.get(sc.chunk.id)
                 if best is None or sc.score > best.score:

@@ -67,7 +67,12 @@ class VectorStore(Protocol):
     def upsert(self, chunks: Sequence[EmbeddedChunk]) -> None: ...
 
     def hybrid_search(
-        self, query: Embedding, *, category: str | None, top_k: int
+        self,
+        query: Embedding,
+        *,
+        category: str | None,
+        department: str | None = None,
+        top_k: int,
     ) -> list[ScoredChunk]: ...
 
 

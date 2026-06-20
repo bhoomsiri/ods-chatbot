@@ -93,12 +93,18 @@ class InMemoryVectorStore:
             existing.add(ec.chunk.id)
 
     def hybrid_search(
-        self, query: Embedding, *, category: str | None, top_k: int
+        self,
+        query: Embedding,
+        *,
+        category: str | None,
+        department: str | None = None,
+        top_k: int,
     ) -> list[ScoredChunk]:
         pool = [
             ec
             for ec in self._items
-            if category is None or ec.chunk.category in (None, category)
+            if (category is None or ec.chunk.category in (None, category))
+            and (department is None or ec.chunk.department in (None, department))
         ]
         scored = [
             ScoredChunk(chunk=ec.chunk, score=_cosine(query.dense, ec.embedding.dense))

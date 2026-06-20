@@ -97,19 +97,29 @@ class QdrantVectorStore:
         self._c().upsert(collection_name=self._collection, points=points)
 
     def hybrid_search(
-        self, query: Embedding, *, category: str | None, top_k: int
+        self,
+        query: Embedding,
+        *,
+        category: str | None,
+        department: str | None = None,
+        top_k: int,
     ) -> list[ScoredChunk]:
         from qdrant_client import models
 
-        flt = None
+        must: list[Any] = []
         if category is not None:
-            flt = models.Filter(
-                must=[
-                    models.FieldCondition(
-                        key="category", match=models.MatchValue(value=category)
-                    )
-                ]
+            must.append(
+                models.FieldCondition(
+                    key="category", match=models.MatchValue(value=category)
+                )
             )
+        if department is not None:
+            must.append(
+                models.FieldCondition(
+                    key="department", match=models.MatchValue(value=department)
+                )
+            )
+        flt = models.Filter(must=must) if must else None
 
         prefetch = [
             models.Prefetch(query=query.dense, using="dense", limit=top_k, filter=flt)

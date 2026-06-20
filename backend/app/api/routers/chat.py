@@ -34,7 +34,10 @@ async def chat(
     async def event_stream() -> AsyncIterator[str]:
         try:
             async for event in usecase.execute(
-                body.message, history=history, category=body.category
+                body.message,
+                history=history,
+                category=body.category,
+                department=body.department,
             ):
                 if isinstance(event, TokenEvent):
                     yield _sse({"type": "token", "text": event.text})

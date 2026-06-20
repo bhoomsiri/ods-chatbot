@@ -1,19 +1,52 @@
 export type Role = "user" | "assistant";
 
-/** Care phase used as the retrieval category filter (sent to the backend). */
-export type Category = "all" | "pre_op" | "day_of" | "post_op" | "general";
+/**
+ * Content category — matches the `category` tag stored on each chunk in Qdrant.
+ * "all" means no filter (omitted from the request).
+ */
+export type Category =
+  | "all"
+  | "ความรู้พื้นฐาน"
+  | "ก่อนผ่าตัด"
+  | "หลังผ่าตัด"
+  | "เทคนิค";
+
+/** Surgical department — matches the `department` tag stored on each chunk. */
+export type Department =
+  | "all"
+  | "ศัลยกรรมทั่วไป"
+  | "ศัลยกรรมส่องกล้อง/ทางเดินอาหาร"
+  | "จักษุ"
+  | "โสต ศอ นาสิก"
+  | "นรีเวช"
+  | "หลอดเลือด";
 
 export interface CategoryOption {
   value: Category;
   label: string;
 }
 
+export interface DepartmentOption {
+  value: Department;
+  label: string;
+}
+
 export const CATEGORIES: CategoryOption[] = [
-  { value: "all", label: "ทั้งหมด" },
-  { value: "pre_op", label: "ก่อนผ่าตัด" },
-  { value: "day_of", label: "วันผ่าตัด" },
-  { value: "post_op", label: "หลังผ่าตัด" },
-  { value: "general", label: "ทั่วไป" },
+  { value: "all", label: "ทุกหมวด" },
+  { value: "ความรู้พื้นฐาน", label: "ความรู้พื้นฐาน" },
+  { value: "ก่อนผ่าตัด", label: "ก่อนผ่าตัด" },
+  { value: "หลังผ่าตัด", label: "หลังผ่าตัด" },
+  { value: "เทคนิค", label: "เทคนิค/การแพทย์" },
+];
+
+export const DEPARTMENTS: DepartmentOption[] = [
+  { value: "all", label: "ทุกแผนก" },
+  { value: "ศัลยกรรมทั่วไป", label: "ศัลยกรรมทั่วไป" },
+  { value: "ศัลยกรรมส่องกล้อง/ทางเดินอาหาร", label: "ส่องกล้อง/ทางเดินอาหาร" },
+  { value: "จักษุ", label: "จักษุ" },
+  { value: "โสต ศอ นาสิก", label: "หู คอ จมูก" },
+  { value: "นรีเวช", label: "นรีเวช" },
+  { value: "หลอดเลือด", label: "หลอดเลือด" },
 ];
 
 export interface Citation {
@@ -42,8 +75,9 @@ export interface ChatMessage {
 export interface ChatRequest {
   message: string;
   history?: { role: Role; content: string }[];
-  /** Care-phase filter. Omitted/"all" means no category filter. */
-  category?: Category;
+  /** Tag filters. Omitted means no filter on that dimension. */
+  category?: string;
+  department?: string;
 }
 
 export interface ChatResponse {

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
 from app.core.providers import get_ingest_usecase
-from app.schemas.chat import Category, IngestResultDTO
+from app.schemas.chat import IngestResultDTO
 from app.usecases.ingest import IngestDocument
 
 router = APIRouter(tags=["ingest"])
@@ -18,7 +18,7 @@ router = APIRouter(tags=["ingest"])
 async def ingest(
     usecase: Annotated[IngestDocument, Depends(get_ingest_usecase)],
     files: Annotated[list[UploadFile], File()],
-    category: Annotated[Category | None, Form()] = None,
+    category: Annotated[str | None, Form()] = None,
 ) -> list[IngestResultDTO]:
     results: list[IngestResultDTO] = []
     for f in files:
