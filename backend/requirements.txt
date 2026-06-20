@@ -1,0 +1,27 @@
+# --- Core API (always required) ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-multipart==0.0.20
+
+# --- RAG infrastructure ---
+qdrant-client==1.12.2
+google-generativeai==0.8.3
+
+# --- Heavy ML (real mode: ODS_USE_FAKES=false) ---
+# torch + torchvision (CPU) are installed separately in the Dockerfile from the
+# CPU wheel index to avoid the multi-GB CUDA build. FlagEmbedding = bge-m3
+# embedder + bge-reranker-v2-m3; docling = layout/table-aware PDF parsing.
+# transformers is pinned to 4.x: FlagEmbedding 1.3.4 has no upper bound, and
+# unpinned pip resolves to transformers 5.x which breaks bge-m3 at runtime.
+transformers==4.49.0
+FlagEmbedding==1.3.4
+docling==2.26.0
+
+# --- Dev / test ---
+pytest==8.3.4
+pytest-asyncio==0.25.2
+httpx==0.28.1
+mypy==1.14.1
+ruff==0.8.6

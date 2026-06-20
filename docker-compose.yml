@@ -1,0 +1,52 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      ODS_QDRANT_URL: http://qdrant:6333
+    volumes:
+      - ./backend:/app
+      - hf_cache:/root/.cache/huggingface
+    depends_on:
+      - qdrant
+    # Pass the host NVIDIA GPU into the container so bge-m3 + reranker run on
+    # CUDA (fp16). Requires NVIDIA Container Toolkit on the host. Remove this
+    # block to fall back to CPU (also revert the Dockerfile torch index to cpu).
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "3000:3000"
+    environment:
+      BACKEND_URL: http://backend:8000
+      NEXT_PUBLIC_USE_MOCK: "0"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+
+volumes:
+  qdrant_data:
+  hf_cache:
