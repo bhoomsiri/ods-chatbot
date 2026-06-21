@@ -75,6 +75,8 @@ export interface ChatMessage {
 export interface ChatRequest {
   message: string;
   history?: { role: Role; content: string }[];
+  /** Existing thread to append to. Omitted starts a new conversation. */
+  conversationId?: string;
   /** Tag filters. Omitted means no filter on that dimension. */
   category?: string;
   department?: string;
@@ -85,12 +87,27 @@ export interface ChatResponse {
   citations?: Citation[];
 }
 
+/** A chat thread shown in the left history sidebar. */
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  updatedAt?: string;
+}
+
+/** A full conversation with its messages (for loading from history). */
+export interface ConversationDetail {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+}
+
 /**
  * Server-sent event shape the frontend expects from POST /api/chat
  * (text/event-stream). The backend may also return a plain JSON ChatResponse,
  * which the client handles as a non-streaming fallback.
  */
 export type ChatStreamEvent =
+  | { type: "conversation"; id: string; title: string }
   | { type: "token"; text: string }
   | { type: "citations"; citations: Citation[] }
   | { type: "done" }
@@ -99,6 +116,8 @@ export type ChatStreamEvent =
 export interface ChatStreamHandlers {
   onToken: (text: string) => void;
   onCitations: (citations: Citation[]) => void;
+  /** Fired once the server resolves/creates the thread for this message. */
+  onConversation?: (conv: { id: string; title: string }) => void;
   signal?: AbortSignal;
 }
 

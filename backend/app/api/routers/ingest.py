@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
+from app.api.deps import require_admin
 from app.core.providers import get_ingest_usecase
 from app.schemas.chat import IngestResultDTO
 from app.usecases.ingest import IngestDocument
@@ -14,7 +15,11 @@ from app.usecases.ingest import IngestDocument
 router = APIRouter(tags=["ingest"])
 
 
-@router.post("/ingest", response_model=list[IngestResultDTO])
+@router.post(
+    "/ingest",
+    response_model=list[IngestResultDTO],
+    dependencies=[Depends(require_admin)],
+)
 async def ingest(
     usecase: Annotated[IngestDocument, Depends(get_ingest_usecase)],
     files: Annotated[list[UploadFile], File()],

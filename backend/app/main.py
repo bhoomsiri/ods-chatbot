@@ -9,8 +9,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routers import chat, ingest
-from app.core.providers import get_store
+from app.api.routers import chat, conversations, ingest
+from app.core.providers import get_store, init_conversation_store
 from app.core.settings import get_settings
 
 logging.basicConfig(level=logging.INFO)
@@ -30,6 +30,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         get_store().ensure_collection()
     except Exception:  # noqa: BLE001 - never block startup on the vector store
         logger.exception("ensure_collection failed; continuing")
+    try:
+        await init_conversation_store()
+    except Exception:  # noqa: BLE001 - never block startup on the history DB
+        logger.exception("init_conversation_store failed; continuing")
     yield
 
 
@@ -47,6 +51,7 @@ def create_app() -> FastAPI:
 
     app.include_router(chat.router, prefix="/api")
     app.include_router(ingest.router, prefix="/api")
+    app.include_router(conversations.router, prefix="/api")
 
     @app.get("/health")
     async def health() -> dict[str, str]:

@@ -14,10 +14,12 @@ from app.domain.entities import (
     Chunk,
     ChunkTag,
     Citation,
+    Conversation,
     EmbeddedChunk,
     Embedding,
     GuardrailVerdict,
     IntentResult,
+    Message,
     ParsedDocument,
     QueryAnalysis,
     ScoredChunk,
@@ -131,3 +133,39 @@ class Guardrail(Protocol):
     def validate(
         self, answer: str, citations: Sequence[Citation]
     ) -> GuardrailVerdict: ...
+
+
+@runtime_checkable
+class ConversationStore(Protocol):
+    """Persists chat threads + messages, scoped per user (Claude-style history).
+
+    Every method takes ``user_id`` and MUST scope by it so one user can never
+    read or mutate another's conversations — the ownership gate lives here, at
+    the data layer, not only in the controller. Methods that target a single
+    conversation return ``None``/``False`` when it does not exist OR is not owned
+    by ``user_id`` (callers cannot distinguish the two — no information leak).
+    """
+
+    async def create(self, *, user_id: str, title: str) -> Conversation: ...
+
+    async def list_for_user(self, *, user_id: str) -> list[Conversation]: ...
+
+    async def get_messages(
+        self, *, conversation_id: str, user_id: str
+    ) -> list[Message] | None: ...
+
+    async def add_message(
+        self,
+        *,
+        conversation_id: str,
+        user_id: str,
+        role: str,
+        content: str,
+        citations: Sequence[Citation] = (),
+    ) -> Message | None: ...
+
+    async def set_title(
+        self, *, conversation_id: str, user_id: str, title: str
+    ) -> bool: ...
+
+    async def delete(self, *, conversation_id: str, user_id: str) -> bool: ...

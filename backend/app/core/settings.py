@@ -21,6 +21,17 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
+    # Admin key for privileged endpoints (knowledge-base ingest). When set, a
+    # request must send a matching X-Admin-Key header. None = unprotected (local
+    # dev only) — a public/demo deploy MUST set this so testers cannot ingest.
+    admin_key: str | None = None
+
+    # Chat-history database (Postgres). SQLAlchemy async URL, e.g.
+    # "postgresql+asyncpg://ods:ods@postgres:5432/ods". None = no DB configured;
+    # the conversation store then falls back to an in-memory fake (history is not
+    # persisted across restarts). Always None in fake mode.
+    database_url: str | None = None
+
     # Vector store
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None

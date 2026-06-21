@@ -7,6 +7,22 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ods
+      POSTGRES_PASSWORD: ods
+      POSTGRES_DB: ods
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ods -d ods"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   backend:
     build: ./backend
     ports:
@@ -15,11 +31,15 @@ services:
       - .env
     environment:
       ODS_QDRANT_URL: http://qdrant:6333
+      ODS_DATABASE_URL: postgresql+asyncpg://ods:ods@postgres:5432/ods
     volumes:
       - ./backend:/app
       - hf_cache:/root/.cache/huggingface
     depends_on:
-      - qdrant
+      qdrant:
+        condition: service_started
+      postgres:
+        condition: service_healthy
     # Pass the host NVIDIA GPU into the container so bge-m3 + reranker run on
     # CUDA (fp16). Requires NVIDIA Container Toolkit on the host. Remove this
     # block to fall back to CPU (also revert the Dockerfile torch index to cpu).
@@ -47,6 +67,22 @@ services:
     depends_on:
       - backend
 
+  # Cloudflare Tunnel — exposes ONLY the frontend to the internet over an
+  # outbound connection (no port-forward, no open router port, HTTPS handled by
+  # Cloudflare). Public hostname -> http://frontend:3000 is configured in the
+  # Cloudflare dashboard; access is gated by Cloudflare Access (Google login).
+  # backend/qdrant/postgres stay internal to the compose network. Set
+  # CLOUDFLARE_TUNNEL_TOKEN in .env. Start with: docker compose up -d cloudflared
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - frontend
+    restart: unless-stopped
+
 volumes:
   qdrant_data:
   hf_cache:
+  postgres_data:

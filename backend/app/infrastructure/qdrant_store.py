@@ -10,7 +10,13 @@ import hashlib
 from collections.abc import Sequence
 from typing import Any
 
-from app.domain.entities import Chunk, EmbeddedChunk, Embedding, ScoredChunk
+from app.domain.entities import (
+    GENERAL_DEPARTMENT,
+    Chunk,
+    EmbeddedChunk,
+    Embedding,
+    ScoredChunk,
+)
 
 
 def _point_id(chunk_id: str) -> int:
@@ -114,9 +120,15 @@ class QdrantVectorStore:
                 )
             )
         if department is not None:
+            # Always include the general/overview bucket: ODS policy/prep/safety
+            # docs apply to every specialty, so a department filter must keep
+            # them and only exclude OTHER specialties' specific docs.
+            dept_values = [department]
+            if department != GENERAL_DEPARTMENT:
+                dept_values.append(GENERAL_DEPARTMENT)
             must.append(
                 models.FieldCondition(
-                    key="department", match=models.MatchValue(value=department)
+                    key="department", match=models.MatchAny(any=dept_values)
                 )
             )
         flt = models.Filter(must=must) if must else None

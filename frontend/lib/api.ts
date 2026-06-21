@@ -1,8 +1,11 @@
 import type {
+  ChatMessage,
   ChatRequest,
   ChatStreamEvent,
   ChatStreamHandlers,
   Citation,
+  ConversationDetail,
+  ConversationSummary,
   IngestResult,
 } from "./types";
 
@@ -17,6 +20,41 @@ const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "1";
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Stable per-browser identity sent as X-Client-Id so the backend can scope
+ * conversations to "this browser" until Clerk auth lands (then the Clerk user
+ * id takes over server-side, with no frontend change to the contract).
+ */
+function clientId(): string {
+  if (typeof window === "undefined") return "anonymous";
+  const KEY = "ods-client-id";
+  let id = window.localStorage.getItem(KEY);
+  if (!id) {
+    id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `c-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    window.localStorage.setItem(KEY, id);
+  }
+  return id;
+}
+
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return { "X-Client-Id": clientId(), ...extra };
+}
+
+/** Admin key (for knowledge-base ingest), stored once in the admin's browser. */
+export function getAdminKey(): string {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem("ods-admin-key") ?? "";
+}
+
+export function setAdminKey(key: string): void {
+  if (typeof window === "undefined") return;
+  if (key) window.localStorage.setItem("ods-admin-key", key);
+  else window.localStorage.removeItem("ods-admin-key");
 }
 
 const MOCK_CITATIONS: Citation[] = [
@@ -72,11 +110,17 @@ export async function streamChat(
 
   const res = await fetch(`${API_BASE}/chat`, {
     method: "POST",
-    headers: {
+    headers: authHeaders({
       "Content-Type": "application/json",
       Accept: "text/event-stream",
-    },
-    body: JSON.stringify(req),
+    }),
+    body: JSON.stringify({
+      message: req.message,
+      history: req.history,
+      conversation_id: req.conversationId,
+      category: req.category,
+      department: req.department,
+    }),
     signal: handlers.signal,
   });
 
@@ -113,15 +157,22 @@ export async function streamChat(
     const payload = dataLines.join("\n");
     if (payload === "[DONE]") return;
 
+    let evt: ChatStreamEvent;
     try {
-      const evt = JSON.parse(payload) as ChatStreamEvent;
-      if (evt.type === "token") handlers.onToken(evt.text);
-      else if (evt.type === "citations") handlers.onCitations(evt.citations);
-      else if (evt.type === "error") throw new Error(evt.detail);
+      evt = JSON.parse(payload) as ChatStreamEvent;
     } catch {
-      // Tolerate servers that stream raw text deltas instead of JSON.
+      // Not JSON — tolerate servers that stream raw text deltas.
       handlers.onToken(payload);
+      return;
     }
+    // Parsed cleanly: handle the typed event. An error event must propagate
+    // (so the caller marks the message failed) — not be swallowed and rendered
+    // as answer text.
+    if (evt.type === "token") handlers.onToken(evt.text);
+    else if (evt.type === "citations") handlers.onCitations(evt.citations);
+    else if (evt.type === "conversation")
+      handlers.onConversation?.({ id: evt.id, title: evt.title });
+    else if (evt.type === "error") throw new Error(evt.detail);
   };
 
   while (true) {
@@ -150,8 +201,16 @@ export async function ingestFiles(files: File[]): Promise<IngestResult[]> {
   const form = new FormData();
   files.forEach((f) => form.append("files", f));
 
-  const res = await fetch(`${API_BASE}/ingest`, { method: "POST", body: form });
+  const adminKey = getAdminKey();
+  const res = await fetch(`${API_BASE}/ingest`, {
+    method: "POST",
+    headers: authHeaders(adminKey ? { "X-Admin-Key": adminKey } : {}),
+    body: form,
+  });
 
+  if (res.status === 403) {
+    throw new Error("ต้องมีสิทธิ์ผู้ดูแล (admin key) จึงจะอัปโหลดเอกสารได้");
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(
@@ -163,4 +222,87 @@ export async function ingestFiles(files: File[]): Promise<IngestResult[]> {
   if (Array.isArray(data)) return data as IngestResult[];
   if (Array.isArray(data?.results)) return data.results as IngestResult[];
   return files.map((f) => ({ filename: f.name, status: "success" as const }));
+}
+
+// --- Conversation history -------------------------------------------------
+
+interface ApiCitation {
+  id: string;
+  source: string;
+  page?: number | null;
+  score?: number | null;
+  snippet?: string | null;
+  image?: string | null;
+}
+
+interface ApiMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+  citations?: ApiCitation[];
+}
+
+function mapCitations(cs?: ApiCitation[]): Citation[] {
+  return (cs ?? []).map((c) => ({
+    id: c.id,
+    source: c.source,
+    page: c.page ?? null,
+    score: c.score ?? null,
+    snippet: c.snippet ?? undefined,
+    image: c.image ?? null,
+  }));
+}
+
+export async function listConversations(): Promise<ConversationSummary[]> {
+  if (USE_MOCK) return [];
+  const res = await fetch(`${API_BASE}/conversations`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(`โหลดประวัติแชตไม่สำเร็จ (${res.status})`);
+  const data = (await res.json()) as Array<{
+    id: string;
+    title: string;
+    updated_at: string;
+  }>;
+  return data.map((c) => ({ id: c.id, title: c.title, updatedAt: c.updated_at }));
+}
+
+export async function getConversation(id: string): Promise<ConversationDetail> {
+  const res = await fetch(`${API_BASE}/conversations/${id}`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(`เปิดแชตไม่สำเร็จ (${res.status})`);
+  const data = (await res.json()) as {
+    id: string;
+    title: string;
+    messages: ApiMessage[];
+  };
+  const messages: ChatMessage[] = data.messages.map((m) => ({
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    createdAt: Date.parse(m.created_at) || Date.now(),
+    citations: m.role === "assistant" ? mapCitations(m.citations) : undefined,
+  }));
+  return { id: data.id, title: data.title, messages };
+}
+
+export async function deleteConversation(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/conversations/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok && res.status !== 404)
+    throw new Error(`ลบแชตไม่สำเร็จ (${res.status})`);
+}
+
+export async function renameConversation(
+  id: string,
+  title: string,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/conversations/${id}`, {
+    method: "PATCH",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) throw new Error(`เปลี่ยนชื่อแชตไม่สำเร็จ (${res.status})`);
 }

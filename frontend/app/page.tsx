@@ -1,11 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ChatWindow from "@/components/ChatWindow";
-import Sidebar from "@/components/Sidebar";
-import { streamChat } from "@/lib/api";
+import HistorySidebar from "@/components/HistorySidebar";
+import SourcesPanel from "@/components/SourcesPanel";
+import {
+  deleteConversation,
+  getConversation,
+  listConversations,
+  renameConversation,
+  streamChat,
+} from "@/lib/api";
 import type {
   Category,
+  ConversationSummary,
   Department,
   ChatMessage as Message,
 } from "@/lib/types";
@@ -18,6 +26,64 @@ export default function Home() {
   const [sending, setSending] = useState(false);
   const [category, setCategory] = useState<Category>("all");
   const [department, setDepartment] = useState<Department>("all");
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  // Load the history list once on mount (scoped to this browser's client id).
+  useEffect(() => {
+    listConversations()
+      .then(setConversations)
+      .catch(() => setConversations([]));
+  }, []);
+
+  function handleNewChat() {
+    setActiveId(null);
+    setMessages([]);
+  }
+
+  async function handleSelect(id: string) {
+    if (id === activeId) return;
+    try {
+      const detail = await getConversation(id);
+      setActiveId(id);
+      setMessages(detail.messages);
+    } catch {
+      // Stale entry (deleted elsewhere) — drop it and reset.
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+      handleNewChat();
+    }
+  }
+
+  async function handleDelete(id: string) {
+    try {
+      await deleteConversation(id);
+    } catch {
+      /* ignore — remove locally regardless */
+    }
+    setConversations((prev) => prev.filter((c) => c.id !== id));
+    if (id === activeId) handleNewChat();
+  }
+
+  async function handleRename(id: string, title: string) {
+    setConversations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, title } : c)),
+    );
+    try {
+      await renameConversation(id, title);
+    } catch {
+      // Revert on failure by reloading the authoritative list.
+      listConversations().then(setConversations).catch(() => {});
+    }
+  }
+
+  /** Insert/refresh a conversation at the top of the sidebar. */
+  function upsertConversation(id: string, title: string) {
+    setConversations((prev) => {
+      const existing = prev.find((c) => c.id === id);
+      const rest = prev.filter((c) => c.id !== id);
+      return [{ id, title: existing?.title ?? title }, ...rest];
+    });
+  }
 
   async function handleSend(text: string) {
     const userMsg: Message = {
@@ -47,10 +113,15 @@ export default function Home() {
         {
           message: text,
           history,
+          conversationId: activeId ?? undefined,
           category: category === "all" ? undefined : category,
           department: department === "all" ? undefined : department,
         },
         {
+          onConversation: ({ id, title }) => {
+            setActiveId(id);
+            upsertConversation(id, title);
+          },
           onToken: (t) => patch((m) => ({ ...m, content: m.content + t })),
           onCitations: (citations) => patch((m) => ({ ...m, citations })),
         },
@@ -67,7 +138,7 @@ export default function Home() {
     }
   }
 
-  // Sources panel: one group per answered question (Claude-style hierarchy),
+  // Right panel: one group per answered question (Claude-style hierarchy),
   // pairing each cited assistant message with the user question before it.
   const citationGroups = messages.flatMap((m, i) =>
     m.role === "assistant" && (m.citations?.length ?? 0) > 0
@@ -84,7 +155,14 @@ export default function Home() {
 
   return (
     <main className="flex h-screen w-full overflow-hidden bg-slate-100">
-      <Sidebar citationGroups={citationGroups} />
+      <HistorySidebar
+        conversations={conversations}
+        activeId={activeId}
+        onNew={handleNewChat}
+        onSelect={handleSelect}
+        onDelete={handleDelete}
+        onRename={handleRename}
+      />
       <ChatWindow
         messages={messages}
         sending={sending}
@@ -94,6 +172,7 @@ export default function Home() {
         onDepartmentChange={setDepartment}
         onSend={handleSend}
       />
+      <SourcesPanel citationGroups={citationGroups} />
     </main>
   );
 }

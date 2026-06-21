@@ -14,6 +14,7 @@ from app.domain.ports import (
     AnswerLLM,
     ChunkClassifier,
     Chunker,
+    ConversationStore,
     DocumentParser,
     Embedder,
     Guardrail,
@@ -146,6 +147,37 @@ def get_intent_classifier() -> IntentClassifier:
     # Rule-based for now; swap for an LLM adapter here without touching the
     # use case. Same implementation in fake and real mode (pure, no services).
     return RuleBasedIntentClassifier()
+
+
+@lru_cache
+def get_conversation_store() -> ConversationStore:
+    s = get_settings()
+    # Fake/in-memory when no database is configured (fake mode, demos, tests):
+    # history simply isn't persisted across restarts, but the API still works.
+    if s.use_fakes or not s.database_url:
+        from app.infrastructure.fakes import InMemoryConversationStore
+
+        return InMemoryConversationStore()
+    from app.infrastructure.db.session import build_engine, build_sessionmaker
+    from app.infrastructure.postgres_conversation_store import (
+        PostgresConversationStore,
+    )
+
+    engine = build_engine(s.database_url)
+    return PostgresConversationStore(build_sessionmaker(engine))
+
+
+async def init_conversation_store() -> None:
+    """Create chat-history tables at startup when a real database is configured.
+
+    No-op in fake mode / when ODS_DATABASE_URL is unset.
+    """
+    s = get_settings()
+    if s.use_fakes or not s.database_url:
+        return
+    from app.infrastructure.db.session import build_engine, create_all
+
+    await create_all(build_engine(s.database_url))
 
 
 def get_answer_usecase() -> AnswerQuestion:

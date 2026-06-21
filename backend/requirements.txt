@@ -9,6 +9,12 @@ python-multipart==0.0.20
 qdrant-client==1.12.2
 google-generativeai==0.8.3
 
+# --- Chat history persistence (Postgres) ---
+# SQLAlchemy 2.0 async ORM + asyncpg driver. Only used when ODS_DATABASE_URL is
+# set; otherwise the conversation store falls back to an in-memory fake.
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+
 # --- Heavy ML (real mode: ODS_USE_FAKES=false) ---
 # torch + torchvision (CPU) are installed separately in the Dockerfile from the
 # CPU wheel index to avoid the multi-GB CUDA build. FlagEmbedding = bge-m3

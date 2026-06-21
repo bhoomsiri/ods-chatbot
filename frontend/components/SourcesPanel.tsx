@@ -1,12 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { ingestFiles } from "@/lib/api";
+import { useEffect, useRef, useState } from "react";
+import { getAdminKey, ingestFiles, setAdminKey } from "@/lib/api";
 import type { IngestResult } from "@/lib/types";
 import CitationsPanel from "./CitationsPanel";
 import type { CitationGroup } from "./CitationsPanel";
 
-export default function Sidebar({
+export default function SourcesPanel({
   citationGroups = [],
 }: {
   citationGroups?: CitationGroup[];
@@ -17,6 +17,15 @@ export default function Sidebar({
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [adminKey, setAdminKeyState] = useState("");
+
+  // localStorage is client-only; read it after mount to avoid hydration mismatch.
+  useEffect(() => setAdminKeyState(getAdminKey()), []);
+
+  function saveAdminKey(key: string) {
+    setAdminKeyState(key);
+    setAdminKey(key);
+  }
 
   async function handleFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
@@ -35,20 +44,21 @@ export default function Sidebar({
   }
 
   return (
-    <aside className="hidden w-80 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
-      <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-4">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-sm font-bold text-white">
-          ODS
-        </div>
-        <div>
-          <h1 className="text-sm font-semibold text-slate-900">ODS Chatbot</h1>
-          <p className="text-xs text-slate-500">โรงพยาบาลโพธาราม</p>
-        </div>
+    <aside className="hidden w-80 shrink-0 flex-col border-l border-slate-200 bg-white lg:flex">
+      <div className="border-b border-slate-200 px-5 py-4">
+        <h2 className="text-sm font-semibold text-slate-900">แหล่งอ้างอิง</h2>
+        <p className="text-xs text-slate-500">เอกสารที่ใช้ตอบแต่ละคำถาม</p>
       </div>
 
-      {/* Main area: sources panel */}
+      {/* Citations (per-question, Claude-style hierarchy) */}
       <div className="scroll-thin flex-1 overflow-y-auto">
-        <CitationsPanel groups={citationGroups} />
+        {citationGroups.length === 0 ? (
+          <p className="px-5 py-6 text-xs text-slate-400">
+            ยังไม่มีแหล่งอ้างอิง — เริ่มถามคำถามเพื่อดูเอกสารที่ใช้ตอบ
+          </p>
+        ) : (
+          <CitationsPanel groups={citationGroups} />
+        )}
       </div>
 
       {/* Bottom: collapsible knowledge-base upload */}
@@ -71,7 +81,19 @@ export default function Sidebar({
         </button>
 
         {uploadOpen && (
-          <div className="max-h-[60vh] overflow-y-auto px-5 pb-4">
+          <div className="max-h-[50vh] overflow-y-auto px-5 pb-4">
+            {/* Admin key — required to upload once the deploy sets ODS_ADMIN_KEY.
+               Stored locally in this browser; testers without it cannot ingest. */}
+            <label className="mb-1 block text-[11px] font-medium text-slate-500">
+              Admin key (สำหรับผู้ดูแล)
+            </label>
+            <input
+              type="password"
+              value={adminKey}
+              onChange={(e) => saveAdminKey(e.target.value)}
+              placeholder="ใส่ admin key เพื่ออัปโหลด"
+              className="mb-3 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+            />
             <div
               onDragOver={(e) => {
                 e.preventDefault();

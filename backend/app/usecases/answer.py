@@ -31,6 +31,37 @@ from app.domain.ports import (
 )
 
 
+# ODS boilerplate phrases. When present in a rerank query they bias the
+# cross-encoder toward generic "ODS overview" documents and away from
+# procedure-specific ones (a Tympanoplasty consent scores ~0.9 against the bare
+# procedure name but ~0.1 against "...แบบ ODS ได้ไหม"). We add a stripped,
+# procedure-focused variant of each query as an extra rerank lens. This only
+# affects reranking — retrieval already surfaces the procedure document.
+_ODS_BOILERPLATE = (
+    "ในระบบการผ่าตัดแบบวันเดียวกลับ",
+    "การผ่าตัดแบบวันเดียวกลับ",
+    "แบบวันเดียวกลับ",
+    "วันเดียวกลับ",
+    "ของโรงพยาบาลโพธาราม",
+    "โรงพยาบาลโพธาราม",
+    "One-Day Surgery",
+    "One Day Surgery",
+    "(ODS)",
+    "ODS",
+    "ได้หรือไม่",
+    "ได้ไหม",
+    "ได้มั้ย",
+)
+
+
+def _procedure_focus(query: str) -> str:
+    """Strip ODS boilerplate, leaving the procedure/topic terms for reranking."""
+    out = query
+    for phrase in _ODS_BOILERPLATE:
+        out = out.replace(phrase, " ")
+    return " ".join(out.split())
+
+
 @dataclass(frozen=True)
 class RetrievalConfig:
     retrieval_top_k: int = 20
@@ -121,13 +152,29 @@ class AnswerQuestion:
                     merged[sc.chunk.id] = sc
         candidates = sorted(merged.values(), key=lambda s: s.score, reverse=True)
 
-        # 3. Rerank + evidence filter (score threshold). Only the best
-        # rerank_candidates by RRF order go through the cross-encoder.
-        reranked = self._reranker.rerank(
-            analysis.reformulated,
-            candidates[: self._cfg.rerank_candidates],
-            top_k=self._cfg.rerank_top_k,
+        # 3. Rerank + evidence filter (score threshold). Rerank the candidate
+        # pool against EACH search query and keep every chunk's best score
+        # across queries. A single ODS-themed reformulation reranked alone lets
+        # generic "ODS overview" docs crowd out a procedure-specific document
+        # (e.g. the Tympanoplasty consent form scores ~0.9 against the bare
+        # procedure name but ~0.1 against "...แบบ ODS ได้ไหม"). Per-query max
+        # rescues that procedure evidence while keeping the ODS context too.
+        pool = candidates[: self._cfg.rerank_candidates]
+        rerank_queries = list(
+            dict.fromkeys(
+                [*search_queries, *(_procedure_focus(q) for q in search_queries)]
+            )
         )
+        rerank_queries = [q for q in rerank_queries if len(q) >= 4]
+        best_rerank: dict[str, ScoredChunk] = {}
+        for q in rerank_queries:
+            for sc in self._reranker.rerank(q, pool, top_k=self._cfg.rerank_top_k):
+                cur = best_rerank.get(sc.chunk.id)
+                if cur is None or sc.score > cur.score:
+                    best_rerank[sc.chunk.id] = sc
+        reranked = sorted(
+            best_rerank.values(), key=lambda s: s.score, reverse=True
+        )[: self._cfg.rerank_top_k]
         evidence = [c for c in reranked if c.score >= self._cfg.score_threshold]
         log.info(
             "candidates=%d reranked_scores=%s threshold=%.2f evidence=%d",

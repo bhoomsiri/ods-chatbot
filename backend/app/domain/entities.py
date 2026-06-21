@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,13 @@ class Chunk:
     metadata: dict[str, str] = field(default_factory=dict)
 
 
+# Department tag for content that applies to every surgical department (general
+# ODS policy/prep/safety docs). A department filter always includes this bucket
+# so selecting one specialty keeps the general material and only drops OTHER
+# specialties' specific docs.
+GENERAL_DEPARTMENT = "ภาพรวม/ไม่ระบุ"
+
+
 @dataclass(frozen=True)
 class ChunkTag:
     """Classification labels assigned to a chunk before indexing."""
@@ -113,6 +121,28 @@ class Citation:
             snippet=snippet,
             image=c.image,
         )
+
+
+@dataclass(frozen=True)
+class Message:
+    """One persisted chat message belonging to a conversation."""
+
+    id: str
+    role: str  # "user" | "assistant"
+    content: str
+    created_at: datetime
+    citations: list[Citation] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class Conversation:
+    """A persisted chat thread, scoped to a user (Claude-style history item)."""
+
+    id: str
+    user_id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
 
 
 @dataclass(frozen=True)
