@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { type Identity, login, logout } from "@/lib/identity";
 import type { ConversationSummary } from "@/lib/types";
 
 interface Props {
   conversations: ConversationSummary[];
   activeId: string | null;
+  identity: Identity | null;
   onNew: () => void;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
@@ -16,6 +18,18 @@ function PlusIcon() {
   return (
     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
+  );
+}
+
+function LogoutIcon() {
+  return (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9"
+      />
     </svg>
   );
 }
@@ -109,6 +123,7 @@ function Row({
 export default function HistorySidebar({
   conversations,
   activeId,
+  identity,
   onNew,
   onSelect,
   onDelete,
@@ -156,6 +171,45 @@ export default function HistorySidebar({
               />
             ))}
           </div>
+        )}
+      </div>
+
+      {/* Bottom-left account area: who's signed in (via Cloudflare Access) +
+         log out, or a log in button when no session is detected. */}
+      <div className="border-t border-slate-200 p-3">
+        {identity ? (
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold uppercase text-brand-700">
+              {identity.email.charAt(0)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-xs font-medium text-slate-700" title={identity.email}>
+                {identity.name || identity.email}
+              </p>
+              {identity.name && (
+                <p className="truncate text-[11px] text-slate-400" title={identity.email}>
+                  {identity.email}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={logout}
+              title="ออกจากระบบ"
+              className="shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-red-600"
+            >
+              <LogoutIcon />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={login}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            <LogoutIcon />
+            เข้าสู่ระบบ
+          </button>
         )}
       </div>
     </aside>

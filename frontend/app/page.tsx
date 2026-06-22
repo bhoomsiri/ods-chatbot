@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import ChatWindow from "@/components/ChatWindow";
 import HistorySidebar from "@/components/HistorySidebar";
+import LoginScreen from "@/components/LoginScreen";
 import SourcesPanel from "@/components/SourcesPanel";
 import {
   deleteConversation,
@@ -11,6 +12,7 @@ import {
   renameConversation,
   streamChat,
 } from "@/lib/api";
+import { type Identity, fetchIdentity } from "@/lib/identity";
 import type {
   Category,
   ConversationSummary,
@@ -28,12 +30,21 @@ export default function Home() {
   const [department, setDepartment] = useState<Department>("all");
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [identity, setIdentity] = useState<Identity | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
   // Load the history list once on mount (scoped to this browser's client id).
   useEffect(() => {
     listConversations()
       .then(setConversations)
       .catch(() => setConversations([]));
+  }, []);
+
+  // Resolve who's signed in via Cloudflare Access (null off-Cloudflare / dev).
+  useEffect(() => {
+    fetchIdentity()
+      .then(setIdentity)
+      .finally(() => setAuthReady(true));
   }, []);
 
   function handleNewChat() {
@@ -153,11 +164,24 @@ export default function Home() {
       : [],
   );
 
+  // Optional hard gate: when NEXT_PUBLIC_REQUIRE_AUTH=1, block the app behind
+  // the login screen until Cloudflare reports a signed-in user. Default off so
+  // local dev / fake mode (where /cdn-cgi/* 404s) is unaffected.
+  const requireAuth = process.env.NEXT_PUBLIC_REQUIRE_AUTH === "1";
+  if (requireAuth && !identity) {
+    return authReady ? (
+      <LoginScreen />
+    ) : (
+      <main className="h-screen w-full bg-slate-100" />
+    );
+  }
+
   return (
     <main className="flex h-screen w-full overflow-hidden bg-slate-100">
       <HistorySidebar
         conversations={conversations}
         activeId={activeId}
+        identity={identity}
         onNew={handleNewChat}
         onSelect={handleSelect}
         onDelete={handleDelete}
