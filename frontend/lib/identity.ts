@@ -15,6 +15,13 @@ export interface Identity {
 
 const IDENTITY_URL = "/cdn-cgi/access/get-identity";
 
+/**
+ * sessionStorage key marking that the user passed the in-app login screen this
+ * tab session. sessionStorage survives a refresh but is cleared when the tab /
+ * browser closes — so a refresh keeps you in, reopening shows login again.
+ */
+export const ENTERED_KEY = "ods-entered";
+
 /** Cloudflare clears the Access session, then shows its logout page. */
 export const LOGOUT_URL =
   process.env.NEXT_PUBLIC_LOGOUT_URL ?? "/cdn-cgi/access/logout";
@@ -45,5 +52,11 @@ export function login(): void {
 }
 
 export function logout(): void {
+  // Drop the in-app entry flag so returning lands on the login screen.
+  try {
+    window.sessionStorage.removeItem(ENTERED_KEY);
+  } catch {
+    /* sessionStorage unavailable — ignore */
+  }
   window.location.assign(LOGOUT_URL);
 }

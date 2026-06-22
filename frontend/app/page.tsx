@@ -12,7 +12,7 @@ import {
   renameConversation,
   streamChat,
 } from "@/lib/api";
-import { type Identity, fetchIdentity, login } from "@/lib/identity";
+import { ENTERED_KEY, type Identity, fetchIdentity, login } from "@/lib/identity";
 import type {
   Category,
   ConversationSummary,
@@ -31,10 +31,13 @@ export default function Home() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [identity, setIdentity] = useState<Identity | null>(null);
-  // Login screen shows first on every fresh load (in-memory, not persisted), so
-  // closing/reopening or refreshing returns to it. Real auth is enforced by
+  // Login screen shows first when opening the app, but a plain refresh keeps you
+  // in: the flag lives in sessionStorage (survives refresh, cleared when the tab
+  // /browser closes). `checked` gates the first paint so we don't flash the
+  // login screen before reading sessionStorage. Real auth is enforced by
   // Cloudflare Access upstream; this is the in-app entry step.
   const [entered, setEntered] = useState(false);
+  const [checked, setChecked] = useState(false);
 
   // Load the history list once on mount (scoped to this browser's client id).
   useEffect(() => {
@@ -46,6 +49,16 @@ export default function Home() {
   // Resolve who's signed in via Cloudflare Access (null off-Cloudflare / dev).
   useEffect(() => {
     fetchIdentity().then(setIdentity).catch(() => {});
+  }, []);
+
+  // After mount, restore the "entered" flag so a refresh skips the login screen.
+  useEffect(() => {
+    try {
+      if (window.sessionStorage.getItem(ENTERED_KEY) === "1") setEntered(true);
+    } catch {
+      /* sessionStorage unavailable — ignore */
+    }
+    setChecked(true);
   }, []);
 
   function handleNewChat() {
@@ -171,11 +184,23 @@ export default function Home() {
   function handleEnter() {
     const host = window.location.hostname;
     const isLocal = host === "localhost" || host === "127.0.0.1";
-    if (identity || isLocal) setEntered(true);
-    else login();
+    if (identity || isLocal) {
+      try {
+        window.sessionStorage.setItem(ENTERED_KEY, "1");
+      } catch {
+        /* sessionStorage unavailable — ignore */
+      }
+      setEntered(true);
+    } else {
+      login();
+    }
   }
 
-  // Login screen first on every fresh load.
+  // Hold the first paint until we've read sessionStorage (avoids flashing the
+  // login screen on a refresh that should stay in the chat).
+  if (!checked) return <main className="h-screen w-full bg-slate-100" />;
+
+  // Login screen when opening fresh; a refresh restores `entered` above.
   if (!entered) {
     return <LoginScreen identity={identity} onContinue={handleEnter} />;
   }
