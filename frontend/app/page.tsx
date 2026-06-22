@@ -12,7 +12,7 @@ import {
   renameConversation,
   streamChat,
 } from "@/lib/api";
-import { type Identity, fetchIdentity } from "@/lib/identity";
+import { type Identity, fetchIdentity, login } from "@/lib/identity";
 import type {
   Category,
   ConversationSummary,
@@ -31,7 +31,10 @@ export default function Home() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [identity, setIdentity] = useState<Identity | null>(null);
-  const [authReady, setAuthReady] = useState(false);
+  // Login screen shows first on every fresh load (in-memory, not persisted), so
+  // closing/reopening or refreshing returns to it. Real auth is enforced by
+  // Cloudflare Access upstream; this is the in-app entry step.
+  const [entered, setEntered] = useState(false);
 
   // Load the history list once on mount (scoped to this browser's client id).
   useEffect(() => {
@@ -42,9 +45,7 @@ export default function Home() {
 
   // Resolve who's signed in via Cloudflare Access (null off-Cloudflare / dev).
   useEffect(() => {
-    fetchIdentity()
-      .then(setIdentity)
-      .finally(() => setAuthReady(true));
+    fetchIdentity().then(setIdentity).catch(() => {});
   }, []);
 
   function handleNewChat() {
@@ -164,16 +165,19 @@ export default function Home() {
       : [],
   );
 
-  // Optional hard gate: when NEXT_PUBLIC_REQUIRE_AUTH=1, block the app behind
-  // the login screen until Cloudflare reports a signed-in user. Default off so
-  // local dev / fake mode (where /cdn-cgi/* 404s) is unaffected.
-  const requireAuth = process.env.NEXT_PUBLIC_REQUIRE_AUTH === "1";
-  if (requireAuth && !identity) {
-    return authReady ? (
-      <LoginScreen />
-    ) : (
-      <main className="h-screen w-full bg-slate-100" />
-    );
+  // Entering the chat from the login screen. If Cloudflare already signed the
+  // user in (or we're on localhost with no gateway), proceed; otherwise on a
+  // real deploy with no session, send them to the Cloudflare Google login.
+  function handleEnter() {
+    const host = window.location.hostname;
+    const isLocal = host === "localhost" || host === "127.0.0.1";
+    if (identity || isLocal) setEntered(true);
+    else login();
+  }
+
+  // Login screen first on every fresh load.
+  if (!entered) {
+    return <LoginScreen identity={identity} onContinue={handleEnter} />;
   }
 
   return (

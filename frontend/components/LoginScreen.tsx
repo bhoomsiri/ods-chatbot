@@ -1,6 +1,6 @@
 "use client";
 
-import { login } from "@/lib/identity";
+import type { Identity } from "@/lib/identity";
 
 function GoogleIcon() {
   return (
@@ -26,11 +26,19 @@ function GoogleIcon() {
 }
 
 /**
- * Login landing shown when the user is not authenticated (only rendered when
- * NEXT_PUBLIC_REQUIRE_AUTH=1; behind Cloudflare Access they are already signed
- * in before reaching here, so this mostly serves as a post-logout return page).
+ * Login landing shown first on every fresh app load (the `entered` gate in
+ * page.tsx is in-memory, so closing/reopening or refreshing shows it again).
+ * The real Google authentication is enforced upstream by Cloudflare Access;
+ * this is the in-app entry step. `identity` (when known) confirms who Cloudflare
+ * already signed in; `onContinue` proceeds into the chat.
  */
-export default function LoginScreen() {
+export default function LoginScreen({
+  identity,
+  onContinue,
+}: {
+  identity: Identity | null;
+  onContinue: () => void;
+}) {
   return (
     <main className="flex h-screen w-full items-center justify-center bg-slate-100 px-4">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-lg">
@@ -42,13 +50,13 @@ export default function LoginScreen() {
           <p className="mt-2 text-sm text-slate-500">
             ผู้ช่วยให้ข้อมูลการผ่าตัดแบบวันเดียวกลับ (ODS)
             <br />
-            โรงพยาบาลโพธาราม — เข้าสู่ระบบเพื่อเริ่มใช้งาน
+            โรงพยาบาลโพธาราม
           </p>
         </div>
 
         <button
           type="button"
-          onClick={login}
+          onClick={onContinue}
           className="flex w-full items-center justify-center gap-3 rounded-full border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-800 transition hover:bg-slate-50"
         >
           <GoogleIcon />
@@ -56,7 +64,14 @@ export default function LoginScreen() {
         </button>
 
         <p className="mt-4 text-center text-xs text-slate-400">
-          เข้าสู่ระบบอย่างปลอดภัยผ่าน Cloudflare Access
+          {identity ? (
+            <>
+              เข้าสู่ระบบในชื่อ{" "}
+              <span className="font-medium text-slate-500">{identity.email}</span>
+            </>
+          ) : (
+            "เข้าสู่ระบบอย่างปลอดภัยผ่าน Cloudflare Access"
+          )}
         </p>
       </div>
     </main>
