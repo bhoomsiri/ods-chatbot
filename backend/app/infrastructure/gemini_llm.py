@@ -228,9 +228,11 @@ class GeminiQueryAnalyzer:
 
 
 _CATEGORIES = ["ความรู้พื้นฐาน", "ก่อนผ่าตัด", "หลังผ่าตัด", "เทคนิค", "อื่นๆ"]
+# GI endoscopy (gastroscope/colonoscope) is folded into ศัลยกรรมทั่วไป — the
+# hospital files those consents under the general-surgery folder, so there is no
+# separate scope department (keeps the department filter from splitting them).
 _DEPARTMENTS = [
     "ศัลยกรรมทั่วไป",
-    "ศัลยกรรมส่องกล้อง/ทางเดินอาหาร",
     "จักษุ",
     "โสต ศอ นาสิก",
     "นรีเวช",

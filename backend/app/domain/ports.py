@@ -38,7 +38,11 @@ class Chunker(Protocol):
     """Metadata-aware chunking; chunks never cross a page boundary."""
 
     def chunk(
-        self, document: ParsedDocument, *, category: str | None = None
+        self,
+        document: ParsedDocument,
+        *,
+        category: str | None = None,
+        department: str | None = None,
     ) -> list[Chunk]: ...
 
 

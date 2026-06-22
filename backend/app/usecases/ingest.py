@@ -35,18 +35,32 @@ class IngestDocument:
         self._classifier = classifier
 
     def execute(
-        self, content: bytes, filename: str, *, category: str | None = None
+        self,
+        content: bytes,
+        filename: str,
+        *,
+        category: str | None = None,
+        department: str | None = None,
     ) -> IngestReport:
         document = self._parser.parse(content, filename)
-        chunks = self._chunker.chunk(document, category=category)
+        chunks = self._chunker.chunk(
+            document, category=category, department=department
+        )
         if not chunks:
             return IngestReport(filename=filename, chunks=0)
 
-        # Tag each chunk with content category + surgical department.
+        # Tag each chunk with content category + surgical department. A caller
+        # may pin either field up front (e.g. department from the corpus folder,
+        # which is more reliable than guessing from text) — the classifier then
+        # only fills the fields left as None.
         if self._classifier is not None:
             tags = self._classifier.classify([c.text for c in chunks])
             chunks = [
-                dataclasses.replace(c, category=t.category, department=t.department)
+                dataclasses.replace(
+                    c,
+                    category=c.category or t.category,
+                    department=c.department or t.department,
+                )
                 for c, t in zip(chunks, tags, strict=True)
             ]
 

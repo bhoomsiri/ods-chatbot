@@ -50,3 +50,6 @@ Thumbs.db
 
 # --- Logs ---
 *.log
+
+# local corpus copy for batch ingest (never commit hospital docs)
+backend/_corpus/

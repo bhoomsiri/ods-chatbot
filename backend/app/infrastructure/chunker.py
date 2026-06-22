@@ -34,7 +34,11 @@ class MetadataAwareChunker:
         self._min_size = min_size
 
     def chunk(
-        self, document: ParsedDocument, *, category: str | None = None
+        self,
+        document: ParsedDocument,
+        *,
+        category: str | None = None,
+        department: str | None = None,
     ) -> list[Chunk]:
         chunks: list[Chunk] = []
         for page in document.pages:
@@ -47,6 +51,7 @@ class MetadataAwareChunker:
                         source=document.source,
                         page=page.page,
                         category=category,
+                        department=department,
                         image=page.image,
                         metadata={"source": document.source, "page": str(page.page)},
                     )

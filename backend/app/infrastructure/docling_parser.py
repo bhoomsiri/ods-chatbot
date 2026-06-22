@@ -66,12 +66,20 @@ class DoclingParser:
     def _ensure_converter(self) -> Any:
         if self._converter is None:
             from docling.datamodel.base_models import InputFormat
-            from docling.datamodel.pipeline_options import PdfPipelineOptions
+            from docling.datamodel.pipeline_options import (
+                EasyOcrOptions,
+                PdfPipelineOptions,
+            )
             from docling.document_converter import DocumentConverter, PdfFormatOption
 
             pdf_opts = PdfPipelineOptions()  # type: ignore[call-arg]
             pdf_opts.do_ocr = self._do_ocr
             pdf_opts.do_table_structure = True
+            # docling's default OCR languages are ['fr','de','es','en'] — without
+            # Thai, scanned Thai PDFs (e.g. the สปสช. 2567 payment announcement,
+            # which has no text layer) come out as garbage. EasyOCR supports Thai;
+            # keep 'en' for the mixed Thai/English (ICD codes, ODS/MIS) content.
+            pdf_opts.ocr_options = EasyOcrOptions(lang=["th", "en"])
             self._converter = DocumentConverter(
                 format_options={
                     InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_opts)
