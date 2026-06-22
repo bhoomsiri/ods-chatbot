@@ -11,11 +11,14 @@ export type Category =
   | "หลังผ่าตัด"
   | "เทคนิค";
 
-/** Surgical department — matches the `department` tag stored on each chunk. */
+/**
+ * Surgical department — matches the `department` tag stored on each chunk in the
+ * active collection (v3). GI endoscopy was folded into ศัลยกรรมทั่วไป, so there
+ * is no separate scope department.
+ */
 export type Department =
   | "all"
   | "ศัลยกรรมทั่วไป"
-  | "ศัลยกรรมส่องกล้อง/ทางเดินอาหาร"
   | "จักษุ"
   | "โสต ศอ นาสิก"
   | "นรีเวช"
@@ -42,7 +45,6 @@ export const CATEGORIES: CategoryOption[] = [
 export const DEPARTMENTS: DepartmentOption[] = [
   { value: "all", label: "ทุกแผนก" },
   { value: "ศัลยกรรมทั่วไป", label: "ศัลยกรรมทั่วไป" },
-  { value: "ศัลยกรรมส่องกล้อง/ทางเดินอาหาร", label: "ส่องกล้อง/ทางเดินอาหาร" },
   { value: "จักษุ", label: "จักษุ" },
   { value: "โสต ศอ นาสิก", label: "หู คอ จมูก" },
   { value: "นรีเวช", label: "นรีเวช" },
