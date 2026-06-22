@@ -8,10 +8,21 @@ interface Props {
   conversations: ConversationSummary[];
   activeId: string | null;
   identity: Identity | null;
+  /** Mobile drawer open state (ignored on md+ where the sidebar is static). */
+  open: boolean;
+  onClose: () => void;
   onNew: () => void;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => void;
+}
+
+function CloseIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+    </svg>
+  );
 }
 
 function PlusIcon() {
@@ -124,13 +135,28 @@ export default function HistorySidebar({
   conversations,
   activeId,
   identity,
+  open,
+  onClose,
   onNew,
   onSelect,
   onDelete,
   onRename,
 }: Props) {
   return (
-    <aside className="hidden w-72 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
+    <>
+      {/* Mobile backdrop */}
+      {open && (
+        <div
+          className="fixed inset-0 z-30 bg-black/30 md:hidden"
+          onClick={onClose}
+          aria-hidden
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] shrink-0 flex-col border-r border-slate-200 bg-white transition-transform duration-200 md:static md:z-auto md:max-w-none md:translate-x-0 ${
+          open ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
       <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-4">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-sm font-bold text-white">
           ODS
@@ -139,6 +165,14 @@ export default function HistorySidebar({
           <h1 className="truncate text-sm font-semibold text-slate-900">ODS Chatbot</h1>
           <p className="truncate text-xs text-slate-500">โรงพยาบาลโพธาราม</p>
         </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="ml-auto rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 md:hidden"
+          title="ปิด"
+        >
+          <CloseIcon />
+        </button>
       </div>
 
       <div className="px-3 py-3">
@@ -212,6 +246,7 @@ export default function HistorySidebar({
           </button>
         )}
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

@@ -40,7 +40,7 @@ export default function LoginScreen({
   onContinue: () => void;
 }) {
   return (
-    <main className="flex h-screen w-full items-center justify-center bg-slate-100 px-4">
+    <main className="flex h-dvh w-full items-center justify-center bg-slate-100 px-4">
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-lg">
         <div className="mb-6 flex flex-col items-center text-center">
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-600 text-sm font-bold text-white">

@@ -1,10 +1,15 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "ODS Chatbot — โรงพยาบาลโพธาราม",
   description:
     "ผู้ช่วยตอบคำถามเรื่องการผ่าตัดแบบวันเดียว (One-Day Surgery) จากคู่มือโรงพยาบาล",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({

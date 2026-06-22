@@ -24,6 +24,30 @@ interface Props {
   onCategoryChange: (c: Category) => void;
   onDepartmentChange: (d: Department) => void;
   onSend: (text: string) => void;
+  /** Open the history drawer (mobile only). */
+  onOpenHistory: () => void;
+  /** Open the sources drawer (mobile/tablet only). */
+  onOpenSources: () => void;
+}
+
+function MenuIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+    </svg>
+  );
+}
+
+function DocIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
+      />
+    </svg>
+  );
 }
 
 export default function ChatWindow({
@@ -34,6 +58,8 @@ export default function ChatWindow({
   onCategoryChange,
   onDepartmentChange,
   onSend,
+  onOpenHistory,
+  onOpenSources,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -48,21 +74,23 @@ export default function ChatWindow({
 
   return (
     <section className="flex h-full flex-1 flex-col bg-slate-100">
-      {/* Top bar: title (mobile) + category filter */}
-      <header className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-3">
-        <div className="flex items-center gap-2 md:hidden">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-xs font-bold text-white">
-            ODS
-          </div>
-          <span className="text-sm font-semibold">ODS Chatbot</span>
-        </div>
-        <div className="ml-auto flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs font-medium text-slate-500">หมวดหมู่</label>
+      {/* Top bar: drawer toggles (mobile) + category/department filters */}
+      <header className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2.5 sm:px-5 sm:py-3">
+        <button
+          type="button"
+          onClick={onOpenHistory}
+          className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 md:hidden"
+          title="ประวัติการสนทนา"
+        >
+          <MenuIcon />
+        </button>
+        <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-3">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <label className="hidden text-xs font-medium text-slate-500 sm:inline">หมวดหมู่</label>
             <select
               value={category}
               onChange={(e) => onCategoryChange(e.target.value as Category)}
-              className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              className="min-w-0 max-w-[40vw] rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 sm:max-w-none sm:px-2.5"
             >
               {CATEGORIES.map((c) => (
                 <option key={c.value} value={c.value}>
@@ -71,12 +99,12 @@ export default function ChatWindow({
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs font-medium text-slate-500">แผนก</label>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <label className="hidden text-xs font-medium text-slate-500 sm:inline">แผนก</label>
             <select
               value={department}
               onChange={(e) => onDepartmentChange(e.target.value as Department)}
-              className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+              className="min-w-0 max-w-[40vw] rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 sm:max-w-none sm:px-2.5"
             >
               {DEPARTMENTS.map((d) => (
                 <option key={d.value} value={d.value}>
@@ -85,6 +113,14 @@ export default function ChatWindow({
               ))}
             </select>
           </div>
+          <button
+            type="button"
+            onClick={onOpenSources}
+            className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 lg:hidden"
+            title="แหล่งอ้างอิง"
+          >
+            <DocIcon />
+          </button>
         </div>
       </header>
 

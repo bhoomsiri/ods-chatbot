@@ -6,10 +6,23 @@ import type { IngestResult } from "@/lib/types";
 import CitationsPanel from "./CitationsPanel";
 import type { CitationGroup } from "./CitationsPanel";
 
+function CloseIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
 export default function SourcesPanel({
   citationGroups = [],
+  open = false,
+  onClose = () => {},
 }: {
   citationGroups?: CitationGroup[];
+  /** Mobile/tablet drawer open state (ignored on lg+ where it is static). */
+  open?: boolean;
+  onClose?: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -44,10 +57,33 @@ export default function SourcesPanel({
   }
 
   return (
-    <aside className="hidden w-80 shrink-0 flex-col border-l border-slate-200 bg-white lg:flex">
-      <div className="border-b border-slate-200 px-5 py-4">
-        <h2 className="text-sm font-semibold text-slate-900">แหล่งอ้างอิง</h2>
-        <p className="text-xs text-slate-500">เอกสารที่ใช้ตอบแต่ละคำถาม</p>
+    <>
+      {/* Mobile/tablet backdrop */}
+      {open && (
+        <div
+          className="fixed inset-0 z-30 bg-black/30 lg:hidden"
+          onClick={onClose}
+          aria-hidden
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 right-0 z-40 flex w-80 max-w-[85vw] shrink-0 flex-col border-l border-slate-200 bg-white transition-transform duration-200 lg:static lg:z-auto lg:max-w-none lg:translate-x-0 ${
+          open ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+      <div className="flex items-start justify-between gap-2 border-b border-slate-200 px-5 py-4">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">แหล่งอ้างอิง</h2>
+          <p className="text-xs text-slate-500">เอกสารที่ใช้ตอบแต่ละคำถาม</p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 lg:hidden"
+          title="ปิด"
+        >
+          <CloseIcon />
+        </button>
       </div>
 
       {/* Citations (per-question, Claude-style hierarchy) */}
@@ -189,6 +225,7 @@ export default function SourcesPanel({
       <div className="border-t border-slate-200 px-5 py-3 text-[11px] text-slate-400">
         Powered by Qdrant · BGE-M3 · Gemini
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

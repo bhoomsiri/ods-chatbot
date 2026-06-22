@@ -38,6 +38,9 @@ export default function Home() {
   // Cloudflare Access upstream; this is the in-app entry step.
   const [entered, setEntered] = useState(false);
   const [checked, setChecked] = useState(false);
+  // Mobile drawer state (sidebars are static on desktop).
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
 
   // Load the history list once on mount (scoped to this browser's client id).
   useEffect(() => {
@@ -64,9 +67,11 @@ export default function Home() {
   function handleNewChat() {
     setActiveId(null);
     setMessages([]);
+    setHistoryOpen(false); // close the drawer on mobile after acting
   }
 
   async function handleSelect(id: string) {
+    setHistoryOpen(false); // close the drawer on mobile after picking
     if (id === activeId) return;
     try {
       const detail = await getConversation(id);
@@ -198,7 +203,7 @@ export default function Home() {
 
   // Hold the first paint until we've read sessionStorage (avoids flashing the
   // login screen on a refresh that should stay in the chat).
-  if (!checked) return <main className="h-screen w-full bg-slate-100" />;
+  if (!checked) return <main className="h-dvh w-full bg-slate-100" />;
 
   // Login screen when opening fresh; a refresh restores `entered` above.
   if (!entered) {
@@ -206,11 +211,13 @@ export default function Home() {
   }
 
   return (
-    <main className="flex h-screen w-full overflow-hidden bg-slate-100">
+    <main className="flex h-dvh w-full overflow-hidden bg-slate-100">
       <HistorySidebar
         conversations={conversations}
         activeId={activeId}
         identity={identity}
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
         onNew={handleNewChat}
         onSelect={handleSelect}
         onDelete={handleDelete}
@@ -224,8 +231,14 @@ export default function Home() {
         onCategoryChange={setCategory}
         onDepartmentChange={setDepartment}
         onSend={handleSend}
+        onOpenHistory={() => setHistoryOpen(true)}
+        onOpenSources={() => setSourcesOpen(true)}
       />
-      <SourcesPanel citationGroups={citationGroups} />
+      <SourcesPanel
+        citationGroups={citationGroups}
+        open={sourcesOpen}
+        onClose={() => setSourcesOpen(false)}
+      />
     </main>
   );
 }
