@@ -30,7 +30,6 @@ from app.domain.ports import (
     VectorStore,
 )
 
-
 # ODS boilerplate phrases. When present in a rerank query they bias the
 # cross-encoder toward generic "ODS overview" documents and away from
 # procedure-specific ones (a Tympanoplasty consent scores ~0.9 against the bare
@@ -73,6 +72,48 @@ class RetrievalConfig:
     score_threshold: float = 0.3
 
 
+@dataclass(frozen=True)
+class RetrievalOutcome:
+    """Result of the pre-LLM stages of the pipeline (intent -> evidence filter).
+
+    Lets callers stop *before* generation: the answer use case streams an answer
+    from ``evidence``, while the offline eval harness measures retrieval quality
+    against ``reranked`` / ``evidence`` without paying for any answer tokens. The
+    intermediate stages are exposed so retrieval metrics can inspect each one.
+    """
+
+    # Greeting / chit-chat: answer directly, no retrieval happened.
+    direct_response: str | None
+    # False only for clearly out-of-scope questions (early refusal).
+    in_scope: bool
+    search_queries: list[str]
+    candidates: list[ScoredChunk]  # merged hybrid retrieval, pre-rerank
+    reranked: list[ScoredChunk]  # post-rerank, pre-threshold
+    evidence: list[ScoredChunk]  # post-threshold; what the LLM would receive
+
+
+@dataclass(frozen=True)
+class GenerationOutcome:
+    """Non-streaming result of the full pipeline, for the eval harness.
+
+    ``answer`` is the user-facing text the streaming pipeline would have produced
+    (a greeting / out-of-scope / refusal message, or the grounded answer).
+    ``evidence`` carries the FULL chunk text fed to the LLM (faithfulness /
+    context metrics need it, not the truncated citation snippet).
+    """
+
+    # "greeting" | "out_of_scope" | "refused_no_evidence" | "answered"
+    status: str
+    answer: str
+    evidence: list[ScoredChunk]
+    guardrail_allowed: bool | None = None
+
+    @property
+    def refused(self) -> bool:
+        """True when the system declined to answer from the manual."""
+        return self.status in ("out_of_scope", "refused_no_evidence")
+
+
 class AnswerQuestion:
     def __init__(
         self,
@@ -95,14 +136,22 @@ class AnswerQuestion:
         self._guardrail = guardrail
         self._cfg = config or RetrievalConfig()
 
-    async def execute(
+    async def retrieve(
         self,
         question: str,
         *,
         history: Sequence[ChatTurn] = (),
         category: str | None = None,
         department: str | None = None,
-    ) -> AsyncIterator[AnswerEvent]:
+    ) -> RetrievalOutcome:
+        """Run intent routing -> analyze -> retrieve -> rerank -> evidence filter
+        and stop *before* the answer LLM. Returns every intermediate stage.
+
+        ``execute`` calls this and then streams an answer; the eval harness calls
+        it directly to measure retrieval quality without spending answer tokens.
+        Keeping the logic here (not duplicated in eval) guarantees the harness
+        scores the exact pipeline production runs.
+        """
         log = logging.getLogger("ods.answer")
 
         # 0. Input routing: greetings / chit-chat answer directly (no RAG),
@@ -110,16 +159,28 @@ class AnswerQuestion:
         intent = await self._intent.classify(question, history)
         if intent.direct_response is not None:
             log.info("intent=%s; skipping retrieval", intent.kind)
-            yield TokenEvent(intent.direct_response)
-            return
+            return RetrievalOutcome(
+                direct_response=intent.direct_response,
+                in_scope=True,
+                search_queries=[],
+                candidates=[],
+                reranked=[],
+                evidence=[],
+            )
 
         # 1. Cheap pre-retrieval: analyze intent — scope check, reformulation,
         # and decomposition of compound questions.
         analysis = await self._analyzer.analyze(question, history)
         if not analysis.in_scope:
             log.info("out_of_scope reason=%r", analysis.reason)
-            yield TokenEvent(OUT_OF_SCOPE_TEXT)
-            return
+            return RetrievalOutcome(
+                direct_response=None,
+                in_scope=False,
+                search_queries=[],
+                candidates=[],
+                reranked=[],
+                evidence=[],
+            )
 
         # Middle path: retrieve with the RAW question as well as the reformulated
         # / decomposed queries, then merge. This keeps the benefits of
@@ -172,9 +233,9 @@ class AnswerQuestion:
                 cur = best_rerank.get(sc.chunk.id)
                 if cur is None or sc.score > cur.score:
                     best_rerank[sc.chunk.id] = sc
-        reranked = sorted(
-            best_rerank.values(), key=lambda s: s.score, reverse=True
-        )[: self._cfg.rerank_top_k]
+        reranked = sorted(best_rerank.values(), key=lambda s: s.score, reverse=True)[
+            : self._cfg.rerank_top_k
+        ]
         evidence = [c for c in reranked if c.score >= self._cfg.score_threshold]
         log.info(
             "candidates=%d reranked_scores=%s threshold=%.2f evidence=%d",
@@ -183,18 +244,94 @@ class AnswerQuestion:
             self._cfg.score_threshold,
             len(evidence),
         )
+        return RetrievalOutcome(
+            direct_response=None,
+            in_scope=True,
+            search_queries=search_queries,
+            candidates=candidates,
+            reranked=reranked,
+            evidence=evidence,
+        )
+
+    async def generate(
+        self,
+        question: str,
+        *,
+        history: Sequence[ChatTurn] = (),
+        category: str | None = None,
+        department: str | None = None,
+    ) -> GenerationOutcome:
+        """Run the full pipeline and collect the answer (non-streaming).
+
+        Same stages and safety gates as ``execute`` — it shares ``retrieve`` and
+        applies the identical greeting / out-of-scope / no-evidence rules and the
+        output guardrail — but returns the assembled answer + full evidence for
+        offline scoring instead of streaming SSE events.
+        """
+        outcome = await self.retrieve(
+            question, history=history, category=category, department=department
+        )
+        if outcome.direct_response is not None:
+            return GenerationOutcome(
+                status="greeting", answer=outcome.direct_response, evidence=[]
+            )
+        if not outcome.in_scope:
+            return GenerationOutcome(
+                status="out_of_scope", answer=OUT_OF_SCOPE_TEXT, evidence=[]
+            )
+        if not outcome.evidence:
+            return GenerationOutcome(
+                status="refused_no_evidence", answer=REFUSAL_TEXT, evidence=[]
+            )
+
+        citations = [Citation.from_scored(c) for c in outcome.evidence]
+        collected: list[str] = []
+        async for token in self._llm.stream(
+            question=question, contexts=outcome.evidence, history=history
+        ):
+            collected.append(token)
+        answer = "".join(collected)
+        verdict = self._guardrail.validate(answer, citations)
+        return GenerationOutcome(
+            status="answered",
+            answer=answer,
+            evidence=list(outcome.evidence),
+            guardrail_allowed=verdict.allowed,
+        )
+
+    async def execute(
+        self,
+        question: str,
+        *,
+        history: Sequence[ChatTurn] = (),
+        category: str | None = None,
+        department: str | None = None,
+    ) -> AsyncIterator[AnswerEvent]:
+        outcome = await self.retrieve(
+            question, history=history, category=category, department=department
+        )
+
+        # Greeting / chit-chat short-circuit (no RAG).
+        if outcome.direct_response is not None:
+            yield TokenEvent(outcome.direct_response)
+            return
+
+        # Clearly out-of-scope question -> early refusal.
+        if not outcome.in_scope:
+            yield TokenEvent(OUT_OF_SCOPE_TEXT)
+            return
 
         # Safety rule §5.1: no evidence -> refuse, do not hallucinate.
-        if not evidence:
+        if not outcome.evidence:
             yield TokenEvent(REFUSAL_TEXT)
             return
 
-        citations = [Citation.from_scored(c) for c in evidence]
+        citations = [Citation.from_scored(c) for c in outcome.evidence]
 
         # 4. Stream the grounded answer.
         collected: list[str] = []
         async for token in self._llm.stream(
-            question=question, contexts=evidence, history=history
+            question=question, contexts=outcome.evidence, history=history
         ):
             collected.append(token)
             yield TokenEvent(token)
