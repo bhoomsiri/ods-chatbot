@@ -1,0 +1,52 @@
+{
+  "experiment": "kg_compare",
+  "purpose": "Compare hybrid Vector RAG vs GraphRAG (LightRAG) on an ODS document subset to test whether Knowledge Graph is over-engineering for this domain.",
+  "isolation": {
+    "collection_access": "read-only query + payload filter on ods_chunks_v3 (NO upsert/delete/index edit)",
+    "new_code_only_in": "backend/eval/kg_compare/",
+    "must_not_edit": ["backend/app/", "benchmark/gold.csv", "benchmark/questions.json", "backend/eval/runs/ (existing)"],
+    "output_dirs": "backend/eval/runs/kg_compare/{vector_subset,graphrag,kg_store}/",
+    "report_file": "benchmark/kg_comparison.xlsx (must NOT overwrite final_comparison.xlsx)",
+    "branch": "exp/kg-compare"
+  },
+  "qdrant": {
+    "collection": "ods_chunks_v3",
+    "payload_filter_key": "source",
+    "subset_sources": [
+      "ประกาศการจ่าย ODS และ MIS ฉ.ปรับปรุง 2567",
+      "ข้อเสนอแนะ ODS MIS ปี66",
+      "ความปลอดภัยของการผ่าตัดแบบวันเดียวกลับ Safety in One Day Surgery (ODS)"
+    ],
+    "subset_chunk_counts": {
+      "ประกาศการจ่าย ODS และ MIS ฉ.ปรับปรุง 2567": 62,
+      "ข้อเสนอแนะ ODS MIS ปี66": 262,
+      "ความปลอดภัยของการผ่าตัดแบบวันเดียวกลับ Safety in One Day Surgery (ODS)": 387
+    },
+    "subset_total_chunks": 711,
+    "corpus_total_chunks": 2334
+  },
+  "eval_set": {
+    "selection_rule": "A gold question is 'answerable from subset' iff its authoritative gold source (backend/eval/datasets/gold_sources.json, expert-mapped to Qdrant `source` stems) overlaps the 3-doc subset. CONFIRMED via ground truth, not string-matching.",
+    "coverage_confirmed": "Exactly 5/30 questions overlap the subset: ids 1, 2, 4, 20, 30. q2/q4/q20 fully in subset; q1 answerable from Safety (ODS definition p.103, in subset) though gold also cites ขั้นตอน doc; q30 is the rejection probe (no price in corpus) sourced from ประกาศ2567. The other 25 have NO gold source in the subset. n cannot grow beyond 5 without changing the subset.",
+    "design": "split — use all 30 questions honestly, by role",
+    "in_subset_quality": {
+      "gold_question_ids": [1, 2, 4, 20],
+      "rejection_probe_id": 30,
+      "n": 5,
+      "measures": "answer quality (Context P/R, Faithfulness, AnswerRelevancy, BLEU, BERTScore, src-Precision@k). ILLUSTRATIVE / per-question — n too small for a significant winner."
+    },
+    "out_of_subset_rejection": {
+      "gold_question_ids": [3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 24, 25, 26, 27, 28, 29],
+      "n": 25,
+      "measures": "rejection / hallucination — answer is NOT in the subset corpus, so BOTH RAGs SHOULD refuse ('ไม่พบข้อมูล'). Tests safety §5. Vector RAG refuses via the 0.3 evidence threshold; GraphRAG may synthesize a wrong answer from neighbouring graph entities. Meaningful n; a load-bearing axis."
+    }
+  },
+  "fairness_locked_params": {
+    "answer_model": "gemini-2.5-flash",
+    "embeddings": "bge-m3 (dense+sparse)",
+    "judge": "Claude (same as existing eval harness)",
+    "vector_rerank_threshold": 0.3,
+    "note": "Both RAGs must use identical answer model, embeddings, eval set, and judge (spec 6.5 gates A-E)."
+  },
+  "statistical_caveat": "n=5 is too small to claim a statistically significant quality winner (spec 6: paired + bootstrap 95% CI will overlap). Quality metrics are reported as ILLUSTRATIVE / per-question. Load-bearing evidence for the over-engineering conclusion is the COST/COMPLEXITY axis (spec 4) and DOMAIN-FIT axis (single- vs multi-hop, spec 5), neither of which requires large n."
+}

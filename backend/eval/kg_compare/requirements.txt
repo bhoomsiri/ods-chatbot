@@ -1,0 +1,19 @@
+# KG-comparison experiment — extra dependencies (isolated, NOT in the app image).
+#
+# Installed ephemerally into the running backend container for the experiment:
+#     docker compose exec backend pip install -r eval/kg_compare/requirements.txt
+#
+# Deliberately kept OUT of backend/pyproject.toml to preserve §0 isolation — the
+# production image and its locked deps are untouched. Re-install after any
+# container rebuild (`docker compose up --build`), then re-run build_kg.
+#
+# Note: lightrag-hku pulls google-genai and bumps pydantic 2.10 -> 2.13; the app
+# still imports cleanly under the bump (verified). networkx (graphml stats) ships
+# with the base image.
+
+lightrag-hku==1.5.4
+# Phase 3 scoring — independent Claude judge (uses ANTHROPIC_API_KEY from .env)
+# + sentence-BLEU vs gold (sacrebleu + pythainlp Thai tokenizer).
+anthropic==0.116.0
+sacrebleu==2.6.0
+pythainlp==5.3.4
