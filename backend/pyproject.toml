@@ -23,8 +23,25 @@ module = [
     "google.*",
     "google.generativeai.*",
     "openai.*",
+    "pypdfium2.*",
+    "yaml.*",
+    "sacrebleu.*",
+    "pythainlp.*",
+    "bert_score.*",
+    "ragas.*",
+    "datasets.*",
+    "langchain_anthropic.*",
+    "langchain_core.*",
+    "openpyxl.*",
 ]
 ignore_missing_imports = true
+
+# Operational CLI scripts (batch ingest, etc.) are not part of the typed app
+# surface. The eval harness reuses their corpus-walk helpers, which pulls them
+# into `mypy eval`; don't fail strict on them.
+[[tool.mypy.overrides]]
+module = ["scripts.*"]
+ignore_errors = true
 
 [tool.ruff]
 line-length = 90

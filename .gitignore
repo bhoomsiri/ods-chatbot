@@ -53,3 +53,17 @@ Thumbs.db
 
 # local corpus copy for batch ingest (never commit hospital docs)
 backend/_corpus/
+
+# benchmark run outputs
+benchmark/perf_raw.csv
+benchmark/perf_summary.xlsx
+
+# jmeter run outputs
+benchmark/results.jtl
+benchmark/smoke.jtl
+benchmark/report/
+benchmark/report_*/
+benchmark/*.log
+
+# eval harness run outputs (per-question results + summaries; regenerated)
+backend/eval/runs/

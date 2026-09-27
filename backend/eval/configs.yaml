@@ -1,0 +1,75 @@
+# OFAT ablation matrix. Baseline = the values production runs today (verified
+# against the live backend env). Every other config changes exactly ONE knob.
+#
+# kind:  runtime = swap query params only (cheap, reuses the live collection)
+#        index   = needs a re-ingested collection per chunk/overlap (phase 3)
+# eval:  retrieval = deterministic, no LLM (phase 1)
+#        generation / rejection = calls the LLM (phase 2)
+#
+# Phase 1 (run_retrieval.py) runs only kind=runtime configs whose eval includes
+# "retrieval", with reformulation held OFF (no LLM) for a deterministic baseline.
+# The reformulation effect itself is isolated in E7 and measured in phase 2.
+
+configs:
+  # Baseline doubles as the reference for both retrieval and generation, and as
+  # the "reformulation ON" arm of the E7 comparison.
+  - name: baseline
+    knob: baseline
+    kind: runtime
+    collection: ods_chunks_v3
+    query:
+      retrieval_top_k: 20
+      rerank_candidates: 20
+      rerank_top_k: 8
+      score_threshold: 0.3
+      answer_model: gemini-2.5-flash
+      reformulate: true
+      temperature: 0.1
+    eval: [retrieval, generation]
+
+  # E3 — retrieval_top_k (how many hybrid candidates to keep before rerank)
+  - { name: E3_topk_10, knob: "E3:retrieval_top_k", query: { retrieval_top_k: 10 }, eval: [retrieval] }
+  - { name: E3_topk_30, knob: "E3:retrieval_top_k", query: { retrieval_top_k: 30 }, eval: [retrieval] }
+
+  # E4 — rerank_candidates (how many candidates the cross-encoder scores)
+  - { name: E4_cand_40, knob: "E4:rerank_candidates", query: { rerank_candidates: 40, retrieval_top_k: 40 }, eval: [retrieval] }
+
+  # E5 — rerank_top_k (how many reranked chunks survive to the evidence filter).
+  # Retrieval@k can't separate these (proven in phase 1), so they also carry
+  # generation eval: faithfulness / answer-relevancy + context-count + cost decide.
+  - { name: E5_rrtopk_5,  knob: "E5:rerank_top_k", query: { rerank_top_k: 5 },  eval: [retrieval, generation] }
+  - { name: E5_rrtopk_10, knob: "E5:rerank_top_k", query: { rerank_top_k: 10 }, eval: [retrieval, generation] }
+
+  # E6 — score_threshold (evidence filter cutoff on the reranker score)
+  - { name: E6_thr_0.2, knob: "E6:score_threshold", query: { score_threshold: 0.2 }, eval: [retrieval, rejection] }
+  - { name: E6_thr_0.4, knob: "E6:score_threshold", query: { score_threshold: 0.4 }, eval: [retrieval, rejection] }
+  - { name: E6_thr_0.5, knob: "E6:score_threshold", query: { score_threshold: 0.5 }, eval: [retrieval, rejection] }
+
+  # E7 — query transform. "off" (reformulate: false) is compared against the
+  # baseline ("on"). Both retrieval (phase 1) and generation (phase 2): the
+  # answer-relevancy delta decides whether reformulation earns its keep.
+  - { name: E7_qt_off, knob: "E7:query_transform", query: { reformulate: false }, eval: [retrieval, generation] }
+
+  # E8 — answer_model (generation only, phase 2)
+  - { name: E8_model_pro,        knob: "E8:answer_model", query: { answer_model: gemini-2.5-pro },        eval: [generation], repeats: 3 }
+  - { name: E8_model_flash_lite, knob: "E8:answer_model", query: { answer_model: gemini-2.5-flash-lite }, eval: [generation], repeats: 3 }
+
+  # E9 — temperature (generation only, phase 2)
+  - { name: E9_temp_0.0, knob: "E9:temperature", query: { temperature: 0.0 }, eval: [generation], repeats: 3 }
+  - { name: E9_temp_0.3, knob: "E9:temperature", query: { temperature: 0.3 }, eval: [generation], repeats: 3 }
+  - { name: E9_temp_0.5, knob: "E9:temperature", query: { temperature: 0.5 }, eval: [generation], repeats: 3 }
+
+  # E10 — query-transform MODEL (generation only, phase 2). Baseline reformulates
+  # the query with Flash-Lite; E10 swaps in Flash to test whether a stronger
+  # reformulator improves the downstream answer. Completes the 3 states of query
+  # transform: off (E7) / Flash-Lite (baseline) / Flash (E10).
+  - { name: E10_reformulate_flash, knob: "E10:reformulate_model", query: { reformulate_model: gemini-2.5-flash }, eval: [generation], repeats: 3 }
+
+  # E1 — chunk_size (re-index, phase 3). overlap ~15% of chunk_size.
+  - { name: E1_chunk_256,  knob: "E1:chunk_size", kind: index, collection: ods_eval_c256,  ingest: { chunk_size: 256,  overlap: 38 },  eval: [retrieval] }
+  - { name: E1_chunk_512,  knob: "E1:chunk_size", kind: index, collection: ods_eval_c512,  ingest: { chunk_size: 512,  overlap: 77 },  eval: [retrieval] }
+  - { name: E1_chunk_1024, knob: "E1:chunk_size", kind: index, collection: ods_eval_c1024, ingest: { chunk_size: 1024, overlap: 154 }, eval: [retrieval] }
+
+  # E2 — overlap (re-index, phase 3) at the winning chunk_size (placeholder 800).
+  - { name: E2_overlap_10, knob: "E2:overlap", kind: index, collection: ods_eval_o10, ingest: { chunk_size: 800, overlap: 80 },  eval: [retrieval] }
+  - { name: E2_overlap_20, knob: "E2:overlap", kind: index, collection: ods_eval_o20, ingest: { chunk_size: 800, overlap: 160 }, eval: [retrieval] }

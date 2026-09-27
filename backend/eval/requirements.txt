@@ -1,0 +1,19 @@
+# Eval-harness dependencies — kept OUT of the backend image (requirements.txt)
+# so the production API stays slim and unaffected. Install only when running the
+# harness:  pip install -r eval/requirements.txt
+#
+# Phase 1 (retrieval-only) needs NOTHING here: it reuses the backend's own
+# pydantic + PyYAML (already present transitively via transformers) and the
+# metrics are pure-Python. This file is for the phase 2/3 additions.
+
+# Config parsing (already transitively present in the backend image; pinned here
+# for a standalone/host run).
+PyYAML==6.0.2
+
+# Reporting (report.py -> ablation_summary.xlsx) — phase 2/3.
+openpyxl==3.1.5
+
+# LLM-judge + semantic metrics — phase 2 only (heavy, pulls datasets/langchain).
+# Uncomment when wiring run_generation.py:
+# ragas==0.2.6
+# bert-score==0.3.13
